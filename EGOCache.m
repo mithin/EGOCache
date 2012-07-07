@@ -66,6 +66,10 @@ static EGOCache* __instance;
 #pragma mark -
 
 @implementation EGOCache
+{
+    BOOL isDirty;
+}
+
 @synthesize defaultTimeoutInterval;
 
 + (EGOCache*)currentCache {
@@ -88,7 +92,7 @@ static EGOCache* __instance;
 		} else {
 			cacheDictionary = [[NSMutableDictionary alloc] init];
 		}
-		
+		isDirty = NO;
 		diskOperationQueue = [[NSOperationQueue alloc] init];
 		
 		[[NSFileManager defaultManager] createDirectoryAtPath:EGOCacheDirectory() 
@@ -106,7 +110,12 @@ static EGOCache* __instance;
 		}
 		if ([removeList count] > 0) {
 			[cacheDictionary removeObjectsForKeys:removeList];
+            isDirty = YES;
 		}
+        
+        //Register for background and terminate notification so that we can save the plist file.
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(appWillTerminate:) name:UIApplicationWillTerminateNotification object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(appDidEnterBackground:) name:UIApplicationDidEnterBackgroundNotification object:nil];
 	}
 	
 	return self;
@@ -144,6 +153,18 @@ static EGOCache* __instance;
 	if(!date) return NO;
 	if([[[NSDate date] earlierDate:date] isEqualToDate:date]) return NO;
 	return [[NSFileManager defaultManager] fileExistsAtPath:cachePathForKey(key)];
+}
+
+- (void)appWithTerminate:(NSNotification *)notification
+{
+    if(isDirty)
+        [self saveCacheDictionary];
+}
+
+- (void)appDidEnterBackground:(NSNotification *)notification
+{
+    if(isDirty)
+        [self saveCacheDictionary];
 }
 
 #pragma mark -
@@ -184,7 +205,10 @@ static EGOCache* __instance;
 
 - (void)saveAfterDelay { // Prevents multiple-rapid saves from happening, which will slow down your app
 	[NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(saveCacheDictionary) object:nil];
-	[self performSelector:@selector(saveCacheDictionary) withObject:nil afterDelay:0.3];
+    @synchronized(self) {
+        isDirty = YES;
+    }
+	[self performSelector:@selector(saveCacheDictionary) withObject:nil afterDelay:30];
 }
 
 - (NSData*)dataForKey:(NSString*)key {
@@ -205,7 +229,8 @@ static EGOCache* __instance;
 
 - (void)saveCacheDictionary {
 	@synchronized(self) {
-		[cacheDictionary writeToFile:cachePathForKey(@"EGOCache.plist") atomically:YES];
+        [cacheDictionary writeToFile:cachePathForKey(@"EGOCache.plist") atomically:YES];
+        isDirty = NO;
 	}
 }
 
