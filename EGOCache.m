@@ -100,18 +100,7 @@ static EGOCache* __instance;
                                                attributes:nil 
                                                     error:NULL];
 		
-		NSMutableArray *removeList = [NSMutableArray array];
-		for(NSString* key in cacheDictionary) {
-			NSDate* date = [cacheDictionary objectForKey:key];
-			if([[[NSDate date] earlierDate:date] isEqualToDate:date]) {
-				[removeList addObject:key];
-				[[NSFileManager defaultManager] removeItemAtPath:cachePathForKey(key) error:NULL];
-			}
-		}
-		if ([removeList count] > 0) {
-			[cacheDictionary removeObjectsForKeys:removeList];
-            isDirty = YES;
-		}
+        [self cleanupCache];
         
         //Register for background and terminate notification so that we can save the plist file.
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(appWillTerminate:) name:UIApplicationWillTerminateNotification object:nil];
@@ -127,6 +116,22 @@ static EGOCache* __instance;
 	}
 	
 	[self saveCacheDictionary];
+}
+
+- (void)cleanupCache
+{
+    NSMutableArray *removeList = [NSMutableArray array];
+    for(NSString* key in cacheDictionary) {
+        NSDate* date = [cacheDictionary objectForKey:key];
+        if([[[NSDate date] earlierDate:date] isEqualToDate:date]) {
+            [removeList addObject:key];
+            [[NSFileManager defaultManager] removeItemAtPath:cachePathForKey(key) error:NULL];
+        }
+    }
+    if ([removeList count] > 0) {
+        [cacheDictionary removeObjectsForKeys:removeList];
+        isDirty = YES;
+    }
 }
 
 - (void)removeCacheForKey:(NSString*)key {
@@ -157,12 +162,14 @@ static EGOCache* __instance;
 
 - (void)appWithTerminate:(NSNotification *)notification
 {
+    [self cleanupCache];
     if(isDirty)
         [self saveCacheDictionary];
 }
 
 - (void)appDidEnterBackground:(NSNotification *)notification
 {
+    [self cleanupCache];
     if(isDirty)
         [self saveCacheDictionary];
 }
@@ -228,10 +235,12 @@ static EGOCache* __instance;
 }
 
 - (void)saveCacheDictionary {
-	@synchronized(self) {
-        [cacheDictionary writeToFile:cachePathForKey(@"EGOCache.plist") atomically:YES];
-        isDirty = NO;
-	}
+    if (isDirty){
+        @synchronized(self) {
+            isDirty = NO;
+            [cacheDictionary writeToFile:cachePathForKey(@"EGOCache.plist") atomically:YES];
+        }
+    }
 }
 
 #pragma mark -
