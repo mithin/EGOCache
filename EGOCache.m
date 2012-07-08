@@ -102,9 +102,11 @@ static EGOCache* __instance;
 		
         [self cleanupCache];
         
+#if TARGET_OS_IPHONE
         //Register for background and terminate notification so that we can save the plist file.
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(appWillTerminate:) name:UIApplicationWillTerminateNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(appDidEnterBackground:) name:UIApplicationDidEnterBackgroundNotification object:nil];
+#endif
 	}
 	
 	return self;
